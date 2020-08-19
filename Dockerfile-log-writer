@@ -1,0 +1,18 @@
+FROM python:3.7.3
+
+RUN mkdir -p /init
+RUN mkdir -p /log_writer
+RUN mkdir -p /logs
+RUN mkdir -p /simulation-tools
+
+COPY requirements.txt /requirements.txt
+RUN pip install --upgrade pip
+RUN pip install -r /requirements.txt
+
+COPY init/ /init/
+COPY log_writer/ /log_writer/
+COPY simulation-tools/ /simulation-tools/
+
+WORKDIR /
+
+CMD [ "python3", "-u", "-m", "log_writer.listener" ]

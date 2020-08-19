@@ -1,0 +1,26 @@
+version: '3.5'
+
+services:
+
+  log_writer:
+    build:
+      context: .
+      dockerfile: Dockerfile-log-writer
+    image: log_writer:0.1
+    container_name: log_writer
+    restart: "no"
+    env_file:
+      - log_writer.env
+    volumes:
+      - log_writer_logs:/logs
+    networks:
+      - rabbitmq_network
+
+volumes:
+  log_writer_logs:
+    name: log_writer_logs
+
+networks:
+  rabbitmq_network:
+    external: true
+    name: rabbitmq_network
