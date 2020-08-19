@@ -5,7 +5,7 @@
 import asyncio
 import logging
 
-from log_writer.simulation import Simulation
+from log_writer.simulation import SimulationMetadataCollection
 from tools.callbacks import LOGGER as callback_logger
 from tools.clients import RabbitmqClient
 from tools.messages import AbstractMessage
@@ -24,24 +24,24 @@ class ListenerComponent:
         self.__rabbitmq_client = RabbitmqClient()
         self.__rabbitmq_client.add_listener(ListenerComponent.LISTENED_TOPICS, self.simulation_message_handler)
 
-        self.__listened_simulations = {}
+        self.__metadata_collection = SimulationMetadataCollection()
 
     @property
-    def listened_simulations(self):
+    def simulations(self):
         """Returns the received simulation ids as a list."""
-        return list(self.__listened_simulations.keys())
+        return self.__metadata_collection.simulations
 
-    def get_simulation(self, simulation_id: str):
-        """Returns the simulation object corresponding to the given simulation identifier."""
-        return self.__listened_simulations.get(simulation_id, None)
+    def get_metadata(self, simulation_id: str):
+        """Returns the simulation metadata object corresponding to the given simulation identifier."""
+        return self.__metadata_collection.get_simulation(simulation_id)
 
     async def simulation_message_handler(self, message_object, message_routing_key):
         """Handles the received simulation state messages."""
         if isinstance(message_object, AbstractMessage):
             LOGGER.debug("{:s} : {:s} : {:s}".format(
                 message_routing_key, message_object.simulation_id, message_object.message_id))
-            if message_object.simulation_id not in self.__listened_simulations:
-                self.__listened_simulations[message_object.simulation_id] = Simulation(message_object.simulation_id)
+
+            self.__metadata_collection.add_message(message_object, message_routing_key)
 
         else:
             LOGGER.warning("Received '{:s}' message when expecting for '{:s}' message".format(
@@ -54,7 +54,12 @@ async def start_listener_component():
 
     while True:
         await asyncio.sleep(60)
-        LOGGER.info("Simulations listened: {:s}".format(", ".join(message_listener.listened_simulations)))
+        log_message = "\nSimulations listened:\n=====================\n"
+        log_message += "\n".join([
+            str(message_listener.get_metadata(simulation_id))
+            for simulation_id in message_listener.simulations
+        ])
+        LOGGER.info(log_message)
 
 
 if __name__ == "__main__":
