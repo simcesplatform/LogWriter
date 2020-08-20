@@ -29,10 +29,10 @@ services:
       - mongodb_network
 
 volumes:
-  mongo_data:
+  mongodb_data:
     name: mongodb_data
 
 networks:
-  mongo_network:
+  mongodb_network:
     external: true
     name: mongodb_network

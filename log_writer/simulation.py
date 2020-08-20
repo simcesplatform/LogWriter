@@ -3,6 +3,7 @@
 """Module containing a classes for holding the simulation metadata for the simulation platform."""
 
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
+from tools.db_clients import MongodbClient
 from tools.messages import AbstractMessage, AbstractResultMessage, SimulationStateMessage
 
 
@@ -22,6 +23,8 @@ class SimulationMetadata:
 
         self.__epoch_min = None
         self.__epoch_max = None
+
+        self.__mongo_client = MongodbClient()
 
     @property
     def simulation_id(self):
@@ -105,6 +108,9 @@ class SimulationMetadata:
         if message_topic not in self.__topic_messages:
             self.__topic_messages[message_topic] = 0
         self.__topic_messages[message_topic] += 1
+
+        # Store the message in the Mongo database
+        self.__mongo_client.store_message(message_object.json(), message_topic)
 
     def __str__(self):
         start_time_str = to_iso_format_datetime_string(self.start_time)

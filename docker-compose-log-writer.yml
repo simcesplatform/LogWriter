@@ -14,6 +14,7 @@ services:
     volumes:
       - log_writer_logs:/logs
     networks:
+      - mongodb_network
       - rabbitmq_network
 
 volumes:
@@ -21,6 +22,10 @@ volumes:
     name: log_writer_logs
 
 networks:
+  mongodb_network:
+    external: true
+    name: mongodb_network
+
   rabbitmq_network:
     external: true
     name: rabbitmq_network
