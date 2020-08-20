@@ -15,6 +15,8 @@ from tools.tools import FullLogger
 callback_logger.level = max(callback_logger.level, logging.WARNING)
 LOGGER = FullLogger(__name__)
 
+STATISTICS_DISPLAY_INTERVAL = 600
+
 
 class ListenerComponent:
     """Class for the message bus listener component."""
@@ -53,7 +55,8 @@ async def start_listener_component():
     message_listener = ListenerComponent()
 
     while True:
-        await asyncio.sleep(60)
+        # print out the statistics every ten minutes
+        await asyncio.sleep(STATISTICS_DISPLAY_INTERVAL)
         log_message = "\nSimulations listened:\n=====================\n"
         log_message += "\n".join([
             str(message_listener.get_metadata(simulation_id))

@@ -5,6 +5,9 @@
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
 from tools.messages import AbstractMessage, AbstractResultMessage, SimulationStateMessage
+from tools.tools import FullLogger
+
+LOGGER = FullLogger(__name__)
 
 
 class SimulationMetadata:
@@ -13,6 +16,8 @@ class SimulationMetadata:
 
     def __init__(self, simulation_id: str):
         self.__simulation_id = simulation_id
+        self.__name = ""
+        self.__description = ""
         self.__components = set()
         self.__topic_messages = {}
 
@@ -111,6 +116,29 @@ class SimulationMetadata:
 
         # Store the message in the Mongo database
         self.__mongo_client.store_message(message_object.json(), message_topic)
+
+        # Update the metadata to the database if the message was simulation state message.
+        # The first and the last message for a simulation should be simulation state message.
+        if isinstance(message_object, SimulationStateMessage):
+            self.update_database_metadata()
+
+    def update_database_metadata(self):
+        """Updates the metadata into the database."""
+        metadata_attributes = {
+            "StartTime": self.start_time,
+            "Name": self.__name,
+            "Description": self.__description,
+            "Epochs": self.epoch_max,
+            "Processes": sorted(list(self.components))
+        }
+        if self.end_time > self.start_time:
+            metadata_attributes["EndTime"] = self.end_time
+
+        db_result = self.__mongo_client.update_metadata(self.__simulation_id, **metadata_attributes)
+        if db_result:
+            LOGGER.info("Database metadata update successful for '{:s}'".format(self.simulation_id))
+        else:
+            LOGGER.warning("Database metadata update failed for '{:s}'".format(self.simulation_id))
 
     def __str__(self):
         start_time_str = to_iso_format_datetime_string(self.start_time)
