@@ -16,8 +16,8 @@ class SimulationMetadata:
 
     def __init__(self, simulation_id: str):
         self.__simulation_id = simulation_id
-        self.__name = ""
-        self.__description = ""
+        self.__name = None
+        self.__description = None
         self.__components = set()
         self.__topic_messages = {}
 
@@ -67,6 +67,16 @@ class SimulationMetadata:
         return self.__epoch_max
 
     @property
+    def name(self):
+        """Returns the simulation name."""
+        return self.__name
+
+    @property
+    def description(self):
+        """Returns the description for the simulation."""
+        return self.__description
+
+    @property
     def components(self):
         """Returns the simulation component names as a list."""
         return self.__components
@@ -91,6 +101,8 @@ class SimulationMetadata:
                 self.__start_flag = True
             elif message_object.simulation_state == SimulationMetadata.SIMULATION_ENDED:
                 self.__end_flag = True
+            self.__name = message_object.name
+            self.__description = message_object.description
 
         # Check the timestamp for the earliest or the latest messages.
         message_timestamp = to_utc_datetime_object(message_object.timestamp)
