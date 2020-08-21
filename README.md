@@ -22,4 +22,15 @@ Pulling changes to both this repository and all the submodules:
 
 ```bash
 git -c http.sslVerify=false pull --recurse-submodules
+git -c http.sslVerify=false submodule update --remote
 ```
+
+## Start the Log Writer
+
+First configure the connection details for the RabbitMQ message bus and for the MongoDB database in the file [`log_writer.env`](log_writer.env). Instructions on how to setup a local RabbitMQ server can be found at [https://git.ain.rd.tut.fi/procemplus/simulation-manager#start-local-rabbitmq-server](https://git.ain.rd.tut.fi/procemplus/simulation-manager#start-local-rabbitmq-server) and instructions for starting a local MongoDB instance can be found at [https://git.ain.rd.tut.fi/procemplus/logwriter/-/tree/master/mongodb](https://git.ain.rd.tut.fi/procemplus/logwriter/-/tree/master/mongodb).
+
+```bash
+docker-compose -f docker-compose-log-writer.yml --build
+```
+
+For running the Log Writer in the background add `--detach` to the end of the previous command.
