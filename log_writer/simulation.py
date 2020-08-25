@@ -4,7 +4,7 @@
 
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
-from tools.messages import AbstractMessage, AbstractResultMessage, SimulationStateMessage
+from tools.messages import AbstractMessage, AbstractResultMessage, EpochMessage, SimulationStateMessage
 from tools.tools import FullLogger
 
 LOGGER = FullLogger(__name__)
@@ -129,9 +129,9 @@ class SimulationMetadata:
         # Store the message in the Mongo database
         self.__mongo_client.store_message(message_object.json(), message_topic)
 
-        # Update the metadata to the database if the message was simulation state message.
+        # Update the metadata to the database if the message was simulation state or epoch message.
         # The first and the last message for a simulation should be simulation state message.
-        if isinstance(message_object, SimulationStateMessage):
+        if isinstance(message_object, (SimulationStateMessage, EpochMessage)):
             self.update_database_metadata()
 
     def update_database_metadata(self):
