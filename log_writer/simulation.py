@@ -143,7 +143,7 @@ class SimulationMetadata:
             "Epochs": self.epoch_max,
             "Processes": sorted(list(self.components))
         }
-        if self.end_time > self.start_time:
+        if self.end_flag:
             metadata_attributes["EndTime"] = self.end_time
 
         db_result = self.__mongo_client.update_metadata(self.__simulation_id, **metadata_attributes)
