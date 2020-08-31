@@ -158,6 +158,8 @@ class SimulationMetadata:
 
         return "\n    ".join([
             self.simulation_id,
+            "name: " + str(self.name),
+            "description: " + str(self.description),
             "start time: " + (start_time_str if self.start_flag else "({:s})".format(start_time_str)),
             "end_time: " + (end_time_str if self.end_flag else "({:s})".format(end_time_str)),
             "components: {:s}".format(", ".join(self.components)),
