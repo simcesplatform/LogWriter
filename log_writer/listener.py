@@ -43,7 +43,7 @@ class ListenerComponent:
             LOGGER.debug("{:s} : {:s} : {:s}".format(
                 message_routing_key, message_object.simulation_id, message_object.message_id))
 
-            self.__metadata_collection.add_message(message_object, message_routing_key)
+            await self.__metadata_collection.add_message(message_object, message_routing_key)
 
         else:
             LOGGER.warning("Received '{:s}' message when expecting for '{:s}' message".format(
