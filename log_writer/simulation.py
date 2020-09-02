@@ -92,7 +92,7 @@ class SimulationMetadata:
            the total number of messages logged for that topic as values."""
         return self.__topic_messages
 
-    def add_message(self, message_object: AbstractMessage, message_topic: str):
+    async def add_message(self, message_object: AbstractMessage, message_topic: str):
         """Logs the message to the simulation."""
 
         # Check for the start or end flags.
@@ -127,14 +127,16 @@ class SimulationMetadata:
         self.__topic_messages[message_topic] += 1
 
         # Store the message in the Mongo database
-        self.__mongo_client.store_message(message_object.json(), message_topic)
+        result = await self.__mongo_client.store_message(message_object.json(), message_topic)
+        if not result:
+            LOGGER.warning("Message '{:s}' not stored to database.".format(message_object.message_id))
 
         # Update the metadata to the database if the message was simulation state or epoch message.
         # The first and the last message for a simulation should be simulation state message.
         if isinstance(message_object, (SimulationStateMessage, EpochMessage)):
-            self.update_database_metadata()
+            await self.update_database_metadata()
 
-    def update_database_metadata(self):
+    async def update_database_metadata(self):
         """Updates the metadata into the database."""
         metadata_attributes = {
             "StartTime": self.start_time,
@@ -146,7 +148,7 @@ class SimulationMetadata:
         if self.end_flag:
             metadata_attributes["EndTime"] = self.end_time
 
-        db_result = self.__mongo_client.update_metadata(self.__simulation_id, **metadata_attributes)
+        db_result = await self.__mongo_client.update_metadata(self.__simulation_id, **metadata_attributes)
         if db_result:
             LOGGER.info("Database metadata update successful for '{:s}'".format(self.simulation_id))
         else:
@@ -184,8 +186,8 @@ class SimulationMetadataCollection:
            Returns None, if the metadata is not found."""
         return self.__simulations.get(simulation_id, None)
 
-    def add_message(self, message_object: AbstractMessage, message_topic: str):
+    async def add_message(self, message_object: AbstractMessage, message_topic: str):
         """Logs the message to the simulation collection."""
         if message_object.simulation_id not in self.__simulations:
             self.__simulations[message_object.simulation_id] = SimulationMetadata(message_object.simulation_id)
-        self.__simulations[message_object.simulation_id].add_message(message_object, message_topic)
+        await self.__simulations[message_object.simulation_id].add_message(message_object, message_topic)
