@@ -14,7 +14,7 @@ class SimulationMetadata:
     """Class for holding simulation metadata."""
     SIMULATION_STARTED, SIMULATION_ENDED = SimulationStateMessage.SIMULATION_STATES
 
-    def __init__(self, simulation_id: str):
+    def __init__(self, simulation_id: str, mongo_client: MongodbClient):
         self.__simulation_id = simulation_id
         self.__name = None
         self.__description = None
@@ -29,7 +29,7 @@ class SimulationMetadata:
         self.__epoch_min = None
         self.__epoch_max = None
 
-        self.__mongo_client = MongodbClient()
+        self.__mongo_client = mongo_client
 
     @property
     def simulation_id(self):
@@ -136,6 +136,11 @@ class SimulationMetadata:
         if isinstance(message_object, (SimulationStateMessage, EpochMessage)):
             await self.update_database_metadata()
 
+        # Add indexes to the simulation specific collection after the simulation has ended.
+        if (isinstance(message_object, SimulationStateMessage) and
+                message_object.simulation_state == SimulationStateMessage.SIMULATION_STATES[-1]):
+            await self.__mongo_client.add_simulation_indexes(message_object.simulation_id)
+
     async def update_database_metadata(self):
         """Updates the metadata into the database."""
         metadata_attributes = {
@@ -176,6 +181,9 @@ class SimulationMetadataCollection:
     def __init__(self):
         self.__simulations = {}
 
+        self.__mongo_client = MongodbClient()
+        self.__first_message = False
+
     @property
     def simulations(self):
         """The simulation ids as a list."""
@@ -188,6 +196,11 @@ class SimulationMetadataCollection:
 
     async def add_message(self, message_object: AbstractMessage, message_topic: str):
         """Logs the message to the simulation collection."""
+        if not self.__first_message:
+            await self.__mongo_client.update_metadata_indexes()
+            self.__first_message = True
+
         if message_object.simulation_id not in self.__simulations:
-            self.__simulations[message_object.simulation_id] = SimulationMetadata(message_object.simulation_id)
+            self.__simulations[message_object.simulation_id] = SimulationMetadata(
+                message_object.simulation_id, self.__mongo_client)
         await self.__simulations[message_object.simulation_id].add_message(message_object, message_topic)
