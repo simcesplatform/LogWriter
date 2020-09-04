@@ -186,7 +186,8 @@ class SimulationMetadata:
 
         # Add indexes to the simulation specific collection after the simulation has ended.
         if (isinstance(message_object, SimulationStateMessage) and
-                message_object.simulation_state == SimulationStateMessage.SIMULATION_STATES[-1]):
+                message_object.simulation_state == SimulationStateMessage.SIMULATION_STATES[-1] and
+                message_object.simulation_id is not None):
             await self.__mongo_client.add_simulation_indexes(message_object.simulation_id)
 
     async def update_database_metadata(self):
@@ -248,7 +249,7 @@ class SimulationMetadataCollection:
             await self.__mongo_client.update_metadata_indexes()
             self.__first_message = True
 
-        if message_object.simulation_id not in self.__simulations:
+        if message_object.simulation_id is not None and message_object.simulation_id not in self.__simulations:
             self.__simulations[message_object.simulation_id] = SimulationMetadata(
                 message_object.simulation_id, self.__mongo_client)
             LOGGER.info("New simulation started: '{:s}'".format(message_object.simulation_id))

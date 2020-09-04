@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+from typing import Any, Union
 
 from log_writer.simulation import SimulationMetadataCollection
 from tools.callbacks import LOGGER as callback_logger
@@ -37,7 +38,7 @@ class ListenerComponent:
         """Returns the simulation metadata object corresponding to the given simulation identifier."""
         return self.__metadata_collection.get_simulation(simulation_id)
 
-    async def simulation_message_handler(self, message_object, message_routing_key):
+    async def simulation_message_handler(self, message_object: Union[AbstractMessage, Any], message_routing_key: str):
         """Handles the received simulation state messages."""
         if isinstance(message_object, AbstractMessage):
             LOGGER.debug("{:s} : {:s} : {:s}".format(
