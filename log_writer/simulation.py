@@ -2,12 +2,23 @@
 
 """Module containing a classes for holding the simulation metadata for the simulation platform."""
 
+import asyncio
+
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
 from tools.messages import AbstractMessage, AbstractResultMessage, EpochMessage, SimulationStateMessage
-from tools.tools import FullLogger
+from tools.timer import Timer
+from tools.tools import FullLogger, load_environmental_variables
 
 LOGGER = FullLogger(__name__)
+
+MESSAGE_BUFFER_MAX_DOCUMENTS_NAME = "MESSAGE_BUFFER_MAX_DOCUMENTS"
+MESSAGE_BUFFER_MAX_INTERVAL_NAME = "MESSAGE_BUFFER_MAX_INTERVAL"
+
+ENV_VARIABLES = load_environmental_variables(
+    (MESSAGE_BUFFER_MAX_DOCUMENTS_NAME, int, 20),
+    (MESSAGE_BUFFER_MAX_INTERVAL_NAME, int, 10)
+)
 
 
 class SimulationMetadata:
@@ -28,6 +39,12 @@ class SimulationMetadata:
 
         self.__epoch_min = None
         self.__epoch_max = None
+
+        self.__lock = asyncio.Lock()
+        self.__message_buffer = []
+        self.__buffer_timer = None
+        self.__buffer_max_documents = ENV_VARIABLES[MESSAGE_BUFFER_MAX_DOCUMENTS_NAME]
+        self.__buffer_max_interval = ENV_VARIABLES[MESSAGE_BUFFER_MAX_INTERVAL_NAME]
 
         self.__mongo_client = mongo_client
 
@@ -92,6 +109,30 @@ class SimulationMetadata:
            the total number of messages logged for that topic as values."""
         return self.__topic_messages
 
+    async def clear_buffer(self):
+        """Sends all the messages from the buffer to the database."""
+        async with self.__lock:
+            if len(self.__message_buffer) > 1:
+                stored_messages = await self.__mongo_client.store_messages(self.__message_buffer)
+
+                if len(stored_messages) != len(self.__message_buffer):
+                    LOGGER.warning("Only {:d} documents out of {:d} writted to simulation {:s}.".format(
+                        len(stored_messages), len(self.__message_buffer), self.__simulation_id))
+                else:
+                    LOGGER.debug("{:d} documents written to simulation {:s}".format(
+                        len(stored_messages), self.__simulation_id))
+
+            elif len(self.__message_buffer) == 1:
+                message, topic_name = self.__message_buffer[0]
+                result = await self.__mongo_client.store_message(message, topic_name)
+                if not result:
+                    LOGGER.warning("Message not written for simulation {:s}".format(self.__simulation_id))
+                else:
+                    LOGGER.debug("Message written to simulation {:s}".format(self.__simulation_id))
+
+            self.__message_buffer = []
+            self.__buffer_timer = None
+
     async def add_message(self, message_object: AbstractMessage, message_topic: str):
         """Logs the message to the simulation."""
 
@@ -126,10 +167,17 @@ class SimulationMetadata:
             self.__topic_messages[message_topic] = 0
         self.__topic_messages[message_topic] += 1
 
-        # Store the message in the Mongo database
-        result = await self.__mongo_client.store_message(message_object.json(), message_topic)
-        if not result:
-            LOGGER.warning("Message '{:s}' not stored to database.".format(message_object.message_id))
+        # Store the message to the message buffer
+        async with self.__lock:
+            self.__message_buffer.append((message_object.json(), message_topic))
+            if self.__buffer_timer is None:
+                self.__buffer_timer = Timer(False, self.__buffer_max_interval, self.clear_buffer)
+
+        # Clear the message buffer if the buffer is full or
+        # if the last message was a simulation state or an epoch message.
+        if (len(self.__message_buffer) >= self.__buffer_max_documents or
+                isinstance(message_object, (SimulationStateMessage, EpochMessage))):
+            await self.clear_buffer()
 
         # Update the metadata to the database if the message was simulation state or epoch message.
         # The first and the last message for a simulation should be simulation state message.
