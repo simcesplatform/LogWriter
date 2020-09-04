@@ -251,4 +251,5 @@ class SimulationMetadataCollection:
         if message_object.simulation_id not in self.__simulations:
             self.__simulations[message_object.simulation_id] = SimulationMetadata(
                 message_object.simulation_id, self.__mongo_client)
+            LOGGER.info("New simulation started: '{:s}'".format(message_object.simulation_id))
         await self.__simulations[message_object.simulation_id].add_message(message_object, message_topic)
