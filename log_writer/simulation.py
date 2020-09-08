@@ -3,6 +3,8 @@
 """Module containing a classes for holding the simulation metadata for the simulation platform."""
 
 import asyncio
+import datetime
+from typing import Dict, Set, Union
 
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
@@ -49,62 +51,62 @@ class SimulationMetadata:
         self.__mongo_client = mongo_client
 
     @property
-    def simulation_id(self):
+    def simulation_id(self) -> str:
         """The simulation identifier."""
         return self.__simulation_id
 
     @property
-    def start_time(self):
+    def start_time(self) -> Union[datetime.datetime, None]:
         """The start time for the simulation."""
         return self.__start_time
 
     @property
-    def end_time(self):
+    def end_time(self) -> Union[datetime.datetime, None]:
         """The end time for the simulation."""
         return self.__end_time
 
     @property
-    def start_flag(self):
+    def start_flag(self) -> bool:
         """Returns True if the starting simulation state message has been logged."""
         return self.__start_flag
 
     @property
-    def end_flag(self):
+    def end_flag(self) -> bool:
         """Returns True if the ending simulation state message has been logged."""
         return self.__end_flag
 
     @property
-    def epoch_min(self):
+    def epoch_min(self) -> Union[int, None]:
         """Returns the smallest logged epoch number."""
         return self.__epoch_min
 
     @property
-    def epoch_max(self):
+    def epoch_max(self) -> Union[int, None]:
         """Returns the largest logged epoch number."""
         return self.__epoch_max
 
     @property
-    def name(self):
+    def name(self) -> Union[str, None]:
         """Returns the simulation name."""
         return self.__name
 
     @property
-    def description(self):
+    def description(self) -> Union[str, None]:
         """Returns the description for the simulation."""
         return self.__description
 
     @property
-    def components(self):
+    def components(self) -> Set[str]:
         """Returns the simulation component names as a list."""
         return self.__components
 
     @property
-    def total_messages(self):
+    def total_messages(self) -> int:
         """Returns the total number of messages logged for the simulation."""
         return sum(self.__topic_messages.values())
 
     @property
-    def topic_messages(self):
+    def topic_messages(self) -> Dict[str, int]:
         """Returns a dictionary with the topic names as keys and
            the total number of messages logged for that topic as values."""
         return self.__topic_messages
@@ -171,7 +173,7 @@ class SimulationMetadata:
         async with self.__lock:
             self.__message_buffer.append((message_object.json(), message_topic))
             if self.__buffer_timer is None:
-                self.__buffer_timer = Timer(False, self.__buffer_max_interval, self.clear_buffer)
+                self.__buffer_timer = Timer(False, self.__buffer_max_interval, self.clear_buffer)  # type: ignore
 
         # Clear the message buffer if the buffer is full or
         # if the last message was a simulation state or an epoch message.
@@ -208,9 +210,9 @@ class SimulationMetadata:
         else:
             LOGGER.warning("Database metadata update failed for '{:s}'".format(self.simulation_id))
 
-    def __str__(self):
-        start_time_str = to_iso_format_datetime_string(self.start_time)
-        end_time_str = to_iso_format_datetime_string(self.end_time)
+    def __str__(self) -> str:
+        start_time_str = str(to_iso_format_datetime_string(str(self.start_time)))
+        end_time_str = str(to_iso_format_datetime_string(str(self.end_time)))
 
         return "\n    ".join([
             self.simulation_id,
