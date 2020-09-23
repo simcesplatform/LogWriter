@@ -4,9 +4,9 @@
 
 import asyncio
 import logging
-from typing import Any, Union
+from typing import Any, List, Union
 
-from log_writer.simulation import SimulationMetadataCollection
+from log_writer.simulation import SimulationMetadata, SimulationMetadataCollection
 from tools.callbacks import LOGGER as callback_logger
 from tools.clients import RabbitmqClient
 from tools.messages import AbstractMessage
@@ -30,11 +30,11 @@ class ListenerComponent:
         self.__metadata_collection = SimulationMetadataCollection()
 
     @property
-    def simulations(self):
+    def simulations(self) -> List[str]:
         """Returns the received simulation ids as a list."""
         return self.__metadata_collection.simulations
 
-    def get_metadata(self, simulation_id: str):
+    def get_metadata(self, simulation_id: str) -> Union[SimulationMetadata, None]:
         """Returns the simulation metadata object corresponding to the given simulation identifier."""
         return self.__metadata_collection.get_simulation(simulation_id)
 

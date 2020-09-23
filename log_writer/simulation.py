@@ -4,7 +4,7 @@
 
 import asyncio
 import datetime
-from typing import Dict, Set, Union
+from typing import Dict, List, Set, Union, cast
 
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
@@ -19,12 +19,12 @@ MESSAGE_BUFFER_MAX_INTERVAL_NAME = "MESSAGE_BUFFER_MAX_INTERVAL"
 
 ENV_VARIABLES = load_environmental_variables(
     (MESSAGE_BUFFER_MAX_DOCUMENTS_NAME, int, 20),
-    (MESSAGE_BUFFER_MAX_INTERVAL_NAME, int, 10)
+    (MESSAGE_BUFFER_MAX_INTERVAL_NAME, float, 10.0)
 )
 
 
 class SimulationMetadata:
-    """Class for holding simulation metadata."""
+    """Class for holding simulation metadata and to store the simulation messages to MongoDB."""
     SIMULATION_STARTED, SIMULATION_ENDED = SimulationStateMessage.SIMULATION_STATES
 
     def __init__(self, simulation_id: str, mongo_client: MongodbClient):
@@ -173,7 +173,7 @@ class SimulationMetadata:
         async with self.__lock:
             self.__message_buffer.append((message_object.json(), message_topic))
             if self.__buffer_timer is None:
-                self.__buffer_timer = Timer(False, self.__buffer_max_interval, self.clear_buffer)  # type: ignore
+                self.__buffer_timer = Timer(False, cast(float, self.__buffer_max_interval), self.clear_buffer)
 
         # Clear the message buffer if the buffer is full or
         # if the last message was a simulation state or an epoch message.
@@ -228,7 +228,7 @@ class SimulationMetadata:
 
 
 class SimulationMetadataCollection:
-    """Class for containing metadata for several simulations."""
+    """Class for containing metadata and storing the information to MongoDB for several simulations."""
     def __init__(self):
         self.__simulations = {}
 
@@ -236,11 +236,11 @@ class SimulationMetadataCollection:
         self.__first_message = False
 
     @property
-    def simulations(self):
+    def simulations(self) -> List[str]:
         """The simulation ids as a list."""
         return list(self.__simulations.keys())
 
-    def get_simulation(self, simulation_id: str):
+    def get_simulation(self, simulation_id: str) -> Union[SimulationMetadata, None]:
         """Returns the metadata object for simulation with the id simulation_id.
            Returns None, if the metadata is not found."""
         return self.__simulations.get(simulation_id, None)
