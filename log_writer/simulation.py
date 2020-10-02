@@ -4,7 +4,7 @@
 
 import asyncio
 import datetime
-from typing import Dict, List, Set, Union, cast
+from typing import Awaitable, Callable, Dict, List, Set, Union, cast
 
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
@@ -45,8 +45,8 @@ class SimulationMetadata:
         self.__lock = asyncio.Lock()
         self.__message_buffer = []
         self.__buffer_timer = None
-        self.__buffer_max_documents = ENV_VARIABLES[MESSAGE_BUFFER_MAX_DOCUMENTS_NAME]
-        self.__buffer_max_interval = ENV_VARIABLES[MESSAGE_BUFFER_MAX_INTERVAL_NAME]
+        self.__buffer_max_documents = cast(int, ENV_VARIABLES[MESSAGE_BUFFER_MAX_DOCUMENTS_NAME])
+        self.__buffer_max_interval = cast(float, ENV_VARIABLES[MESSAGE_BUFFER_MAX_INTERVAL_NAME])
 
         self.__mongo_client = mongo_client
 
@@ -229,11 +229,14 @@ class SimulationMetadata:
 
 class SimulationMetadataCollection:
     """Class for containing metadata and storing the information to MongoDB for several simulations."""
-    def __init__(self):
+    def __init__(self, stop_function: Callable[..., Awaitable[None]] = None):
         self.__simulations = {}
 
         self.__mongo_client = MongodbClient()
         self.__first_message = False
+
+        # the function that is called when receiving a simulation state message "stopped"
+        self.__stop_function = stop_function
 
     @property
     def simulations(self) -> List[str]:
@@ -251,8 +254,13 @@ class SimulationMetadataCollection:
             await self.__mongo_client.update_metadata_indexes()
             self.__first_message = True
 
-        if message_object.simulation_id is not None and message_object.simulation_id not in self.__simulations:
-            self.__simulations[message_object.simulation_id] = SimulationMetadata(
-                message_object.simulation_id, self.__mongo_client)
-            LOGGER.info("New simulation started: '{:s}'".format(message_object.simulation_id))
-        await self.__simulations[message_object.simulation_id].add_message(message_object, message_topic)
+        simulation_id = message_object.simulation_id
+        if simulation_id is not None and simulation_id not in self.__simulations:
+            self.__simulations[simulation_id] = SimulationMetadata(simulation_id, self.__mongo_client)
+            LOGGER.info("New simulation started: '{:s}'".format(simulation_id))
+        await self.__simulations[simulation_id].add_message(message_object, message_topic)
+
+        if (isinstance(message_object, SimulationStateMessage) and
+                self.__stop_function is not None and
+                message_object.simulation_state == SimulationMetadata.SIMULATION_ENDED):
+            asyncio.create_task(self.__stop_function())
