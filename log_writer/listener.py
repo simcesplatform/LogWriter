@@ -10,7 +10,7 @@ from typing import List, Union
 from log_writer.simulation import SimulationMetadata, SimulationMetadataCollection
 from tools.callbacks import LOGGER as callback_logger
 from tools.clients import RabbitmqClient
-from tools.messages import AbstractMessage
+from tools.messages import AbstractMessage, GeneralMessage
 from tools.tools import FullLogger
 
 # No info logs about each received message stored.
@@ -65,7 +65,8 @@ class ListenerComponent:
                 return
 
         if isinstance(message_object, dict):
-            actual_message_object = AbstractMessage.from_json(message_object)
+            # use the GeneralMessage type when dealing with possible unknown message type
+            actual_message_object = GeneralMessage.from_json(message_object)
             if actual_message_object is None:
                 LOGGER.warning(
                     "Could not create a message object from the received message: {:s}".format(str(message_object)))
