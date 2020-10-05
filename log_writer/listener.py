@@ -17,7 +17,7 @@ from tools.tools import FullLogger
 callback_logger.level = max(callback_logger.level, logging.WARNING)
 LOGGER = FullLogger(__name__)
 
-STATISTICS_DISPLAY_INTERVAL = 120
+STATISTICS_DISPLAY_INTERVAL = 60
 STOP_WAIT_TIMER = 15
 
 
@@ -98,7 +98,7 @@ async def start_listener_component():
         LOGGER.info(log_message)
 
     # short wait before exiting to allow all database writes to finish properly.
-    asyncio.sleep(STOP_WAIT_TIMER)
+    await asyncio.sleep(STOP_WAIT_TIMER)
 
 
 if __name__ == "__main__":
