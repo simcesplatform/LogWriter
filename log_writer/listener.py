@@ -10,7 +10,7 @@ from typing import List, Union
 from log_writer.simulation import SimulationMetadata, SimulationMetadataCollection
 from tools.callbacks import LOGGER as callback_logger
 from tools.clients import RabbitmqClient
-from tools.messages import AbstractMessage, GeneralMessage
+from tools.messages import BaseMessage, AbstractMessage, GeneralMessage
 from tools.tools import FullLogger
 
 # No info logs about each received message stored.
@@ -52,7 +52,7 @@ class ListenerComponent:
         """Returns the simulation metadata object corresponding to the given simulation identifier."""
         return self.__metadata_collection.get_simulation(simulation_id)
 
-    async def simulation_message_handler(self, message_object: Union[AbstractMessage, dict, str],
+    async def simulation_message_handler(self, message_object: Union[BaseMessage, dict, str],
                                          message_routing_key: str):
         """Handles the received simulation state messages."""
         if isinstance(message_object, str):
@@ -78,9 +78,14 @@ class ListenerComponent:
                 message_routing_key, message_object.simulation_id, message_object.message_id))
             await self.__metadata_collection.add_message(message_object, message_routing_key)
 
+        elif isinstance(message_object, BaseMessage):
+            LOGGER.debug("{:s} : {:s}".format(
+                message_routing_key, message_object.simulation_id))
+            await self.__metadata_collection.add_message(message_object, message_routing_key)
+
         else:
-            LOGGER.warning("Received '{:s}' message when expecting for '{:s}' message or a dictionary".format(
-                str(type(message_object)), str(AbstractMessage)))
+            LOGGER.warning("Received '{:s}' message when expecting for simulation platform compatible message".format(
+                str(message_object)))
 
 
 async def start_listener_component():

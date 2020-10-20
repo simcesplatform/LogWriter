@@ -8,7 +8,7 @@ from typing import Awaitable, Callable, Dict, List, Set, Union, cast
 
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
-from tools.messages import AbstractMessage, AbstractResultMessage, EpochMessage, SimulationStateMessage
+from tools.messages import AbstractMessage, AbstractResultMessage, BaseMessage, EpochMessage, SimulationStateMessage
 from tools.timer import Timer
 from tools.tools import FullLogger, load_environmental_variables
 
@@ -135,7 +135,7 @@ class SimulationMetadata:
             self.__message_buffer = []
             self.__buffer_timer = None
 
-    async def add_message(self, message_object: AbstractMessage, message_topic: str):
+    async def add_message(self, message_object: BaseMessage, message_topic: str):
         """Logs the message to the simulation."""
 
         # Check for the start or end flags.
@@ -155,7 +155,8 @@ class SimulationMetadata:
             self.__end_time = message_timestamp
 
         # Add to the simulation component list.
-        self.__components.add(message_object.source_process_id)
+        if isinstance(message_object, AbstractMessage):
+            self.__components.add(message_object.source_process_id)
 
         # Check for the smallest or the largest epoch.
         if isinstance(message_object, AbstractResultMessage):
@@ -248,7 +249,7 @@ class SimulationMetadataCollection:
            Returns None, if the metadata is not found."""
         return self.__simulations.get(simulation_id, None)
 
-    async def add_message(self, message_object: AbstractMessage, message_topic: str):
+    async def add_message(self, message_object: BaseMessage, message_topic: str):
         """Logs the message to the simulation collection."""
         if not self.__first_message:
             await self.__mongo_client.update_metadata_indexes()
