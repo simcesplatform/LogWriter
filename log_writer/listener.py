@@ -7,11 +7,13 @@ import json
 import logging
 from typing import List, Union
 
-from log_writer.simulation import SimulationMetadata, SimulationMetadataCollection
+from log_writer.simulation import SimulationMetadata, SimulationMetadataCollection, InvalidMessage
 from tools.callbacks import LOGGER as callback_logger
 from tools.clients import RabbitmqClient
 from tools.messages import BaseMessage, AbstractMessage, GeneralMessage
 from tools.tools import FullLogger
+from tools.tools import EnvironmentVariable
+from tools.datetime_tools import to_utc_datetime_object
 
 # No info logs about each received message stored.
 callback_logger.level = max(callback_logger.level, logging.WARNING)
@@ -31,6 +33,8 @@ class ListenerComponent:
 
         self.__metadata_collection = SimulationMetadataCollection(stop_function=self.stop)
         self.__is_stopped = False
+        # default simulation id is used when a invalid simulation message is received  
+        self.__default_simulation_id = EnvironmentVariable('SIMULATION_ID', str, None).value
 
     async def stop(self) -> None:
         """Stops the log writer."""
@@ -54,23 +58,39 @@ class ListenerComponent:
 
     async def simulation_message_handler(self, message_object: Union[BaseMessage, dict, str],
                                          message_routing_key: str):
-        """Handles the received simulation state messages."""
+        """Handles the received simulation messages."""
+        # if message is a string see if it can be decoded as json
         if isinstance(message_object, str):
             try:
                 message_json = json.loads(message_object)
                 if isinstance(message_json, dict):
                     message_object = message_json
+            
             except json.decoder.JSONDecodeError:
-                LOGGER.warning("Received message could not be decoded into JSON format: {:s}".format(message_object))
-                return
-
+                # create invalid message object from the invalid json string
+                LOGGER.debug("Received message could not be decoded into JSON format: {:s}".format(message_object))
+                message_object = InvalidMessage( InvalidJsonMessage = message_object)
+        
+        # see if valid json is a a valid simulation platform message"        
         if isinstance(message_object, dict):
             # use the GeneralMessage type when dealing with possible unknown message type
             actual_message_object = GeneralMessage.from_json(message_object)
             if actual_message_object is None:
-                LOGGER.warning(
-                    "Could not create a message object from the received message: {:s}".format(str(message_object)))
-                return
+                # invalid message
+                LOGGER.debug(
+                    "Could not create a valid message object from the received message: {:s}".format(str(message_object)))
+                # check if there is a valid timestamp
+                timestamp = message_object.get('Timestamp')
+                # if there is a valid timestamp it is used as the invalid message timestamp
+                if timestamp is not None:
+                    try:
+                        to_utc_datetime_object(timestamp)
+                        
+                    except ValueError:
+                        # timestamp is not valid so it will be created from current time when the invalid message object is created
+                        timestamp = None
+                
+                actual_message_object = InvalidMessage(Timestamp = timestamp, InvalidMessage = message_object)
             message_object = actual_message_object
 
         if isinstance(message_object, AbstractMessage):
@@ -79,14 +99,20 @@ class ListenerComponent:
             await self.__metadata_collection.add_message(message_object, message_routing_key)
 
         elif isinstance(message_object, BaseMessage):
+            if isinstance(message_object, InvalidMessage) and self.__default_simulation_id is None:
+                LOGGER.warning('Unable to log an invalid message since default simulation id has not been given.')
+                return
+            
+            # if message is invalid default simulation id is used
+            simulation_id = message_object.simulation_id if not isinstance(message_object, InvalidMessage) else self.__default_simulation_id      
             LOGGER.debug("{:s} : {:s}".format(
-                message_routing_key, message_object.simulation_id))
-            await self.__metadata_collection.add_message(message_object, message_routing_key)
+                message_routing_key, simulation_id))
+            await self.__metadata_collection.add_message(message_object, message_routing_key, self.__default_simulation_id)
 
         else:
+            # this should not happen.
             LOGGER.warning("Received '{:s}' message when expecting for simulation platform compatible message".format(
                 str(message_object)))
-
 
 async def start_listener_component():
     """Start a listener component for the simulation platform."""
