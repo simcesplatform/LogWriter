@@ -4,7 +4,7 @@
 
 import asyncio
 import datetime
-from typing import Awaitable, Callable, Dict, List, Set, Union, cast, Any
+from typing import Awaitable, Callable, Dict, List, Optional, Set, Union, cast
 
 from log_writer.invalid_message import InvalidMessage
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
@@ -12,7 +12,6 @@ from tools.db_clients import MongodbClient
 from tools.messages import AbstractMessage, AbstractResultMessage, BaseMessage, EpochMessage, SimulationStateMessage
 from tools.timer import Timer
 from tools.tools import FullLogger, load_environmental_variables
-from tools.exceptions.messages import MessageValueError
 
 LOGGER = FullLogger(__name__)
 
@@ -123,22 +122,26 @@ class SimulationMetadata:
                 for message, topic in self.__message_buffer:
                     if isinstance(message, InvalidMessage):
                         invalid_messages.append((message.json(), topic))
-
                     else:
                         valid_messages.append((message.json(), topic))
 
                 # store both kinds of messages and check if the process succeeded.
                 store_valid_task = asyncio.create_task(self.__mongo_client.store_messages(valid_messages))
-                store_invalid_task = asyncio.create_task(self.__mongo_client.store_messages(invalid_messages, invalid = True, default_simulation_id = self.simulation_id))
-                for task, messages, message_type in [(store_valid_task, valid_messages, 'valid'), (store_invalid_task, invalid_messages, 'invalid')]:
+                store_invalid_task = asyncio.create_task(self.__mongo_client.store_messages(
+                    invalid_messages, invalid=True, default_simulation_id=self.simulation_id))
+                for task, messages, message_type in [
+                        (store_valid_task, valid_messages, "valid"),
+                        (store_invalid_task, invalid_messages, "invalid")
+                ]:
                     stored_messages = await task
 
                     if len(stored_messages) != len(messages):
-                        LOGGER.warning("Only {:d} {:s} message documents out of {:d} written to simulation {:s}.".format(
-                            len(stored_messages), message_type, len(messages), self.__simulation_id))
+                        LOGGER.warning(
+                            "Only {:d} {:s} message documents out of {:d} written to simulation {:s}.".format(
+                                len(stored_messages), message_type, len(messages), self.__simulation_id))
                     else:
-                            LOGGER.debug("{:d} {:s} documents written to simulation {:s}".format(
-                                len(stored_messages), message_type, self.__simulation_id))
+                        LOGGER.debug("{:d} {:s} documents written to simulation {:s}".format(
+                            len(stored_messages), message_type, self.__simulation_id))
 
             self.__message_buffer = []
             self.__buffer_timer = None
@@ -256,7 +259,7 @@ class SimulationMetadataCollection:
            Returns None, if the metadata is not found."""
         return self.__simulations.get(simulation_id, None)
 
-    async def add_message(self, message_object: BaseMessage, message_topic: str, simulation_id: str = None):
+    async def add_message(self, message_object: BaseMessage, message_topic: str, simulation_id: Optional[str] = None):
         """Logs the message to the simulation collection.
         Invalid messages do not have a simulation id so simulation_id is used with them."""
         if not self.__first_message:
@@ -265,6 +268,9 @@ class SimulationMetadataCollection:
 
         if not isinstance(message_object, InvalidMessage):
             simulation_id = message_object.simulation_id
+        elif simulation_id is None:
+            LOGGER.warning("Cannot store invalid message without simulation id")
+            return
 
         if simulation_id is not None and simulation_id not in self.__simulations:
             self.__simulations[simulation_id] = SimulationMetadata(simulation_id, self.__mongo_client)
