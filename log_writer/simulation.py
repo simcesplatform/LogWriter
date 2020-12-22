@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
-"""Module containing a classes for holding the simulation metadata for the simulation platform."""
+"""Module containing classes for holding the simulation metadata for the simulation platform."""
 
 import asyncio
 import datetime
-from typing import Awaitable, Callable, Dict, List, Set, Union, cast
+from typing import Awaitable, Callable, Dict, List, Optional, Set, Union, cast
 
+from log_writer.invalid_message import InvalidMessage
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
 from tools.messages import AbstractMessage, AbstractResultMessage, BaseMessage, EpochMessage, SimulationStateMessage
@@ -114,30 +115,39 @@ class SimulationMetadata:
     async def clear_buffer(self):
         """Sends all the messages from the buffer to the database."""
         async with self.__lock:
-            if len(self.__message_buffer) > 1:
-                stored_messages = await self.__mongo_client.store_messages(self.__message_buffer)
+            if len(self.__message_buffer) >= 1:
+                # valid and invalid messages are stored separately so sort buffer to two lists.
+                valid_messages = []
+                invalid_messages = []
+                for message, topic in self.__message_buffer:
+                    if isinstance(message, InvalidMessage):
+                        invalid_messages.append((message.json(), topic))
+                    else:
+                        valid_messages.append((message.json(), topic))
 
-                if len(stored_messages) != len(self.__message_buffer):
-                    LOGGER.warning("Only {:d} documents out of {:d} writted to simulation {:s}.".format(
-                        len(stored_messages), len(self.__message_buffer), self.__simulation_id))
-                else:
-                    LOGGER.debug("{:d} documents written to simulation {:s}".format(
-                        len(stored_messages), self.__simulation_id))
+                # store both kinds of messages and check if the process succeeded.
+                store_valid_task = asyncio.create_task(self.__mongo_client.store_messages(valid_messages))
+                store_invalid_task = asyncio.create_task(self.__mongo_client.store_messages(
+                    invalid_messages, invalid=True, default_simulation_id=self.simulation_id))
+                for task, messages, message_type in [
+                        (store_valid_task, valid_messages, "valid"),
+                        (store_invalid_task, invalid_messages, "invalid")
+                ]:
+                    stored_messages = await task
 
-            elif len(self.__message_buffer) == 1:
-                message, topic_name = self.__message_buffer[0]
-                result = await self.__mongo_client.store_message(message, topic_name)
-                if not result:
-                    LOGGER.warning("Message not written for simulation {:s}".format(self.__simulation_id))
-                else:
-                    LOGGER.debug("Message written to simulation {:s}".format(self.__simulation_id))
+                    if len(stored_messages) != len(messages):
+                        LOGGER.warning(
+                            "Only {:d} {:s} message documents out of {:d} written to simulation {:s}.".format(
+                                len(stored_messages), message_type, len(messages), self.__simulation_id))
+                    else:
+                        LOGGER.debug("{:d} {:s} documents written to simulation {:s}".format(
+                            len(stored_messages), message_type, self.__simulation_id))
 
             self.__message_buffer = []
             self.__buffer_timer = None
 
     async def add_message(self, message_object: BaseMessage, message_topic: str):
         """Logs the message to the simulation."""
-
         # Check for the start or end flags.
         if isinstance(message_object, SimulationStateMessage):
             if message_object.simulation_state == SimulationMetadata.SIMULATION_STARTED:
@@ -172,7 +182,7 @@ class SimulationMetadata:
 
         # Store the message to the message buffer
         async with self.__lock:
-            self.__message_buffer.append((message_object.json(), message_topic))
+            self.__message_buffer.append((message_object, message_topic))
             if self.__buffer_timer is None:
                 self.__buffer_timer = Timer(False, cast(float, self.__buffer_max_interval), self.clear_buffer)
 
@@ -249,13 +259,19 @@ class SimulationMetadataCollection:
            Returns None, if the metadata is not found."""
         return self.__simulations.get(simulation_id, None)
 
-    async def add_message(self, message_object: BaseMessage, message_topic: str):
-        """Logs the message to the simulation collection."""
+    async def add_message(self, message_object: BaseMessage, message_topic: str, simulation_id: Optional[str] = None):
+        """Logs the message to the simulation collection.
+        Invalid messages do not have a simulation id so simulation_id is used with them."""
         if not self.__first_message:
             await self.__mongo_client.update_metadata_indexes()
             self.__first_message = True
 
-        simulation_id = message_object.simulation_id
+        if not isinstance(message_object, InvalidMessage):
+            simulation_id = message_object.simulation_id
+        elif simulation_id is None:
+            LOGGER.warning("Cannot store invalid message without simulation id")
+            return
+
         if simulation_id is not None and simulation_id not in self.__simulations:
             self.__simulations[simulation_id] = SimulationMetadata(simulation_id, self.__mongo_client)
             LOGGER.info("New simulation started: '{:s}'".format(simulation_id))
