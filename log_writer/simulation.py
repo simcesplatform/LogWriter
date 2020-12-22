@@ -6,6 +6,7 @@ import asyncio
 import datetime
 from typing import Awaitable, Callable, Dict, List, Set, Union, cast, Any
 
+from log_writer.invalid_message import InvalidMessage
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
 from tools.messages import AbstractMessage, AbstractResultMessage, BaseMessage, EpochMessage, SimulationStateMessage
@@ -122,15 +123,15 @@ class SimulationMetadata:
                 for message, topic in self.__message_buffer:
                     if isinstance(message, InvalidMessage):
                         invalid_messages.append((message.json(), topic))
-                        
+
                     else:
                         valid_messages.append((message.json(), topic))
-                
+
                 # store both kinds of messages and check if the process succeeded.
                 store_valid_task = asyncio.create_task(self.__mongo_client.store_messages(valid_messages))
                 store_invalid_task = asyncio.create_task(self.__mongo_client.store_messages(invalid_messages, invalid = True, default_simulation_id = self.simulation_id))
                 for task, messages, message_type in [(store_valid_task, valid_messages, 'valid'), (store_invalid_task, invalid_messages, 'invalid')]:
-                    stored_messages = await task 
+                    stored_messages = await task
 
                     if len(stored_messages) != len(messages):
                         LOGGER.warning("Only {:d} {:s} message documents out of {:d} written to simulation {:s}.".format(
@@ -264,7 +265,7 @@ class SimulationMetadataCollection:
 
         if not isinstance(message_object, InvalidMessage):
             simulation_id = message_object.simulation_id
-            
+
         if simulation_id is not None and simulation_id not in self.__simulations:
             self.__simulations[simulation_id] = SimulationMetadata(simulation_id, self.__mongo_client)
             LOGGER.info("New simulation started: '{:s}'".format(simulation_id))
@@ -274,121 +275,3 @@ class SimulationMetadataCollection:
                 self.__stop_function is not None and
                 message_object.simulation_state == SimulationMetadata.SIMULATION_ENDED):
             asyncio.create_task(self.__stop_function())
-
-class InvalidMessage(BaseMessage):
-    """Represents a invalid message.
-    Note though this is a BaseMessage subclass it does not have a type or simulation_id instead they are always None."""
-    
-    CLASS_MESSAGE_TYPE = 'InvalidMessage'
-    MESSAGE_TYPE_CHECK = False
-
-    MESSAGE_ATTRIBUTES = {
-        'InvalidMessage': 'invalid_message',
-        'InvalidJsonMessage': 'invalid_json_message' 
-    }
-    
-    # Type and SimulationId are optional or in fact not used here.
-    OPTIONAL_ATTRIBUTES = ['InvalidMessage', 'InvalidJsonMessage', 'SimulationId', 'Type']
-
-    QUANTITY_BLOCK_ATTRIBUTES = {}
-
-    QUANTITY_ARRAY_BLOCK_ATTRIBUTES = {}
-
-    TIMESERIES_BLOCK_ATTRIBUTES = []
-
-    MESSAGE_ATTRIBUTES_FULL = {
-        **BaseMessage.MESSAGE_ATTRIBUTES_FULL,
-        **MESSAGE_ATTRIBUTES
-    }
-    OPTIONAL_ATTRIBUTES_FULL = BaseMessage.OPTIONAL_ATTRIBUTES_FULL + OPTIONAL_ATTRIBUTES
-    QUANTITY_BLOCK_ATTRIBUTES_FULL = {
-        **BaseMessage.QUANTITY_BLOCK_ATTRIBUTES_FULL,
-        **QUANTITY_BLOCK_ATTRIBUTES
-    }
-    QUANTITY_ARRAY_BLOCK_ATTRIBUTES_FULL = {
-        **BaseMessage.QUANTITY_ARRAY_BLOCK_ATTRIBUTES_FULL,
-        **QUANTITY_ARRAY_BLOCK_ATTRIBUTES
-    }
-    TIMESERIES_BLOCK_ATTRIBUTES_FULL = (
-        BaseMessage.TIMESERIES_BLOCK_ATTRIBUTES_FULL +
-        TIMESERIES_BLOCK_ATTRIBUTES
-    )
-
-    @property
-    def invalid_message(self) -> dict:
-        """The actual invalid message which could not be converted to a proper message class instance.
-        If the message could not be converted to JSON this is None and the message can be found from the invalid_json_message property."""
-        return self.__invalid_message
-    
-    @property
-    def invalid_json_message(self) -> str:
-        """Actual invalid message which was invalid JSON.
-        If the message is valid JSON this is None and the message can be found from the invalid_message property."""
-        return self.__invalid_json_message
-    
-    @property
-    def simulation_id(self) -> None:
-        """Invalid messages do not contain a simulation id so this is always None."""
-        return None
-    
-    @invalid_message.setter
-    def invalid_message(self, invalid_message: Union[dict, None]):
-        """Set invalid message value."""
-        if self._check_invalid_message(invalid_message):
-            self.__invalid_message = invalid_message
-        else:
-            raise MessageValueError('invalid message should be a dict or None.')
-        
-    @invalid_json_message.setter
-    def invalid_json_message(self, invalid_json_message: str):
-        """Set invalid json message value."""
-        if self._check_invalid_json_message(invalid_json_message):
-            self.__invalid_json_message = invalid_json_message
-            
-        else:
-            raise MessageValueError('Invalid value for invalid json message, should be string or None.')
-
-    @simulation_id.setter
-    def simulation_id(self, simulation_id):
-        """Setter for simulation id. Only None is accepted."""
-        if self._check_simulation_id(simulation_id):
-            self.__simulation_id = None
-            
-        else:
-            raise MessageValueError('Simulation id must be None.')     
-
-    def __eq__(self, other: Any) -> bool:
-        """Equality check."""
-        return (
-            super().__eq__(other) and
-            isinstance(other, InvalidMessage) and
-            self.invalid_message == other.invalid_message and
-            self.invalid_json_message == other.invalid_json_message
-        )
-
-    @classmethod
-    def _check_invalid_message(cls, invalid_message: dict) -> bool:
-        """Check that invalid message value is dict or None."""
-        return invalid_message is None or isinstance(invalid_message, dict)
-    
-    @classmethod
-    def _check_invalid_json_message(cls, invalid_json_message):
-        """Check that invalid json message is string or None."""
-        return invalid_json_message is None or isinstance(invalid_json_message, str)
-    
-    @classmethod
-    def _check_simulation_id(cls, simulation_id) -> bool:
-        """Check that simulation id is None."""
-        return simulation_id is None
-    
-    @classmethod
-    def _check_message_type(cls, message_type) -> bool:
-        """Check that message type is None."""
-        return message_type is None
-
-    @classmethod
-    def from_json(cls, json_message: Dict[str, Any]) -> Union[BaseMessage, None]:
-        """Create instance from a dictionary."""
-        if cls.validate_json(json_message):
-            return cls(**json_message)
-        return None
