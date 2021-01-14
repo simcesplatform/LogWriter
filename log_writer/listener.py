@@ -7,20 +7,20 @@ import json
 import logging
 from typing import cast, List, Union
 
-from log_writer.invalid_message import InvalidMessage
-from log_writer.simulation import SimulationMetadata, SimulationMetadataCollection
 from tools.callbacks import LOGGER as callback_logger
 from tools.clients import RabbitmqClient
-from tools.messages import BaseMessage, AbstractMessage, GeneralMessage
-from tools.tools import FullLogger
-from tools.tools import EnvironmentVariable
 from tools.datetime_tools import to_utc_datetime_object
+from tools.messages import BaseMessage, AbstractMessage, GeneralMessage
+from tools.tools import EnvironmentVariable, FullLogger
+
+from log_writer.invalid_message import InvalidMessage
+from log_writer.simulation import SimulationMetadata, SimulationMetadataCollection
 
 # No info logs about each received message stored.
 callback_logger.level = max(callback_logger.level, logging.WARNING)
 LOGGER = FullLogger(__name__)
 
-STATISTICS_DISPLAY_INTERVAL = 60
+STATISTICS_DISPLAY_INTERVAL = cast(int, EnvironmentVariable("STATISTICS_DISPLAY_INTERVAL", int, 60).value)
 STOP_WAIT_TIMER = 15
 
 
