@@ -6,12 +6,13 @@ import asyncio
 import datetime
 from typing import Awaitable, Callable, Dict, List, Optional, Set, Union, cast
 
-from log_writer.invalid_message import InvalidMessage
 from tools.datetime_tools import to_utc_datetime_object, to_iso_format_datetime_string
 from tools.db_clients import MongodbClient
 from tools.messages import AbstractMessage, AbstractResultMessage, BaseMessage, EpochMessage, SimulationStateMessage
 from tools.timer import Timer
 from tools.tools import FullLogger, load_environmental_variables
+
+from log_writer.invalid_message import InvalidMessage
 
 LOGGER = FullLogger(__name__)
 
