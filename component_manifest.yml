@@ -2,8 +2,8 @@
 
 Name: LogWriter
 Type: platform
-Description: "Log Writer component for the Decoupled Simulation Platform"
-DockerImage: procem.ain.rd.tut.fi/despa/log_writer
+Description: "Log Writer component for the SimCES simulation platform"
+DockerImage: ghcr.io/simcesplatform/logwriter
 Attributes:
     MessageBufferMaxDocumentCount:
         Environment: MESSAGE_BUFFER_MAX_DOCUMENTS
